@@ -1,0 +1,49 @@
+{
+  "name": "Cantilever Beam - Baseline",
+  "description": "Single cantilever beam under point load at free end",
+  "version": "1.0.0",
+  "physics_model": "Euler-Bernoulli",
+  "geometry": {
+    "length_m": 2.0,
+    "width_m": 0.1,
+    "height_m": 0.1,
+    "description": "Rectangular cross-section beam"
+  },
+  "material": {
+    "name": "Steel",
+    "youngs_modulus_pa": 200000000000,
+    "density_kg_m3": 7850
+  },
+  "boundary_conditions": {
+    "type": "cantilever",
+    "fixed_end": "left",
+    "free_end": "right",
+    "description": "Left end fully fixed, right end free"
+  },
+  "loading": {
+    "type": "point_load",
+    "magnitude_n": 1000,
+    "direction": [0, -1, 0],
+    "application_point": "free_end",
+    "description": "Downward force at tip"
+  },
+  "expected_analytical_result": {
+    "tip_displacement_m": 0.0016,
+    "tip_displacement_mm": 1.6,
+    "calculation": "δ = F L³ / (3 E I), where I = b h³ / 12",
+    "note": "Approximately 1.6 mm; exact value computed from parameters"
+  },
+  "units": {
+    "length": "meters",
+    "force": "Newtons",
+    "modulus": "Pascals",
+    "displacement": "meters"
+  },
+  "assumptions": [
+    "Linear elastic material (Hooke's law valid)",
+    "Small displacement theory (δ << L)",
+    "Uniform rectangular cross-section",
+    "Negligible self-weight",
+    "Negligible shear deformation"
+  ]
+}
