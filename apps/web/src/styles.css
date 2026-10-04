@@ -34,6 +34,7 @@ input {
   background: white;
   border-right: 1px solid #e2e8f0;
   padding: 24px;
+  overflow-y: auto;
 }
 
 h1 {
@@ -49,6 +50,7 @@ h1 {
 .control-group {
   display: grid;
   gap: 14px;
+  margin-bottom: 16px;
 }
 
 label {
@@ -65,10 +67,29 @@ input {
   background: white;
 }
 
+input:focus {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.error-box {
+  margin-bottom: 16px;
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.error-box p {
+  margin: 0;
+  color: #7f1d1d;
+  font-size: 0.9rem;
+}
+
 .button-row {
   display: flex;
-  gap: 12px;
-  margin-top: 20px;
+  gap: 8px;
+  margin-bottom: 20px;
 }
 
 button {
@@ -80,15 +101,24 @@ button {
   font-weight: 600;
   padding: 10px 16px;
   cursor: pointer;
+  flex: 1;
+}
+
+button:hover {
+  background: #1d4ed8;
 }
 
 button.secondary {
   background: #e2e8f0;
   color: #0f172a;
+  flex: 0 1 auto;
+}
+
+button.secondary:hover {
+  background: #cbd5e1;
 }
 
 .result-box {
-  margin-top: 20px;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
@@ -97,10 +127,37 @@ button.secondary {
 
 .result-box h3 {
   margin-top: 0;
+  margin-bottom: 12px;
+  color: #1e293b;
+  font-size: 1.1rem;
+}
+
+.result-box p {
+  margin: 6px 0;
+  color: #334155;
+  font-size: 0.95rem;
+}
+
+.visual-note {
+  font-size: 0.85rem;
+  color: #64748b;
+  font-style: italic;
+}
+
+.model-note {
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.time-note {
+  font-size: 0.8rem;
+  color: #94a3b8;
 }
 
 .viewport-panel {
   padding: 20px;
+  display: flex;
+  flex-direction: column;
 }
 
 .canvas-header {
@@ -113,8 +170,7 @@ button.secondary {
 }
 
 .viewport-canvas {
-  width: 100%;
-  min-height: 480px;
+  flex: 1;
   border-radius: 16px;
   background: linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
   border: 1px solid #dbeafe;
