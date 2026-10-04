@@ -3,7 +3,6 @@ import * as THREE from 'three';
 import {
   loadBaselineConfig,
   configToBeamParams,
-  cantileverTipDisplacement,
   runAnalyticalSolver,
   validateBeamParams,
   calculateBeamDisplacementAtX,
@@ -27,10 +26,14 @@ type SceneReference = {
   renderer: THREE.WebGLRenderer;
   experimentRoot: THREE.Group;
   support: THREE.Mesh;
+  supportGeometry: THREE.BoxGeometry;
+  supportMaterial: THREE.MeshStandardMaterial;
   beamGroup: THREE.Group;
   loadMarker: THREE.Mesh;
+  loadMarkerGeometry: THREE.SphereGeometry;
+  loadMarkerMaterial: THREE.MeshStandardMaterial;
   loadArrow: THREE.ArrowHelper;
-  animationFrameId: number;
+  lights: THREE.Light[];
 };
 
 export default function App() {
@@ -38,12 +41,13 @@ export default function App() {
   const baselineParams = configToBeamParams(baseline);
 
   const [draftParams, setDraftParams] = useState<BeamParams>(baselineParams);
+  const [committedParams, setCommittedParams] = useState<BeamParams>(baselineParams);
   const [committedResult, setCommittedResult] = useState<SimulationResult | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [visualScale, setVisualScale] = useState<number>(100);
   const sceneRef = useRef<SceneReference | null>(null);
   const mountRef = useRef<HTMLDivElement | null>(null);
-  const animationFrameRef = useRef<number | null>(null);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
 
   const updateDraftParam = (key: keyof BeamParams, value: number) => {
     setDraftParams((prev) => ({ ...prev, [key]: value }));
@@ -59,6 +63,7 @@ export default function App() {
 
     try {
       const result = runAnalyticalSolver(draftParams);
+      setCommittedParams({ ...draftParams });
       setCommittedResult(result);
       setValidationError(null);
     } catch (err) {
@@ -68,6 +73,7 @@ export default function App() {
 
   const handleReset = () => {
     setDraftParams(baselineParams);
+    setCommittedParams(baselineParams);
     setVisualScale(100);
     try {
       const result = runAnalyticalSolver(baselineParams);
@@ -84,7 +90,7 @@ export default function App() {
       return;
     }
     try {
-      const json = exportExperimentState(baseline, draftParams, committedResult, visualScale);
+      const json = exportExperimentState(baseline, committedParams, committedResult, visualScale);
       const blob = new Blob([json], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -113,6 +119,7 @@ export default function App() {
     mountRef.current.innerHTML = '';
     mountRef.current.appendChild(renderer.domElement);
 
+    // Lighting
     const ambient = new THREE.AmbientLight(0xffffff, 1.2);
     scene.add(ambient);
 
@@ -120,14 +127,17 @@ export default function App() {
     directional.position.set(2, 4, 3);
     scene.add(directional);
 
+    const lights = [ambient, directional];
+
     // Experiment coordinate system root
     const experimentRoot = new THREE.Group();
     experimentRoot.name = 'experimentRoot';
     scene.add(experimentRoot);
 
     // Support at x = 0 (fixed end)
+    const supportGeometry = new THREE.BoxGeometry(0.28, 0.6, 0.5);
     const supportMaterial = new THREE.MeshStandardMaterial({ color: '#334155' });
-    const support = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.6, 0.5), supportMaterial);
+    const support = new THREE.Mesh(supportGeometry, supportMaterial);
     support.position.set(0, 0, 0);
     support.name = 'support';
     experimentRoot.add(support);
@@ -138,18 +148,17 @@ export default function App() {
     experimentRoot.add(beamGroup);
 
     // Load marker at x = L (free end)
-    const loadMarker = new THREE.Mesh(
-      new THREE.SphereGeometry(0.06, 16, 16),
-      new THREE.MeshStandardMaterial({ color: '#ef4444' })
-    );
-    loadMarker.position.set(draftParams.length, 0, 0);
+    const loadMarkerGeometry = new THREE.SphereGeometry(0.06, 16, 16);
+    const loadMarkerMaterial = new THREE.MeshStandardMaterial({ color: '#ef4444' });
+    const loadMarker = new THREE.Mesh(loadMarkerGeometry, loadMarkerMaterial);
+    loadMarker.position.set(committedParams.length, 0, 0);
     loadMarker.name = 'loadMarker';
     experimentRoot.add(loadMarker);
 
     // Load arrow at x = L (free end)
     const loadArrow = new THREE.ArrowHelper(
       new THREE.Vector3(0, -1, 0),
-      new THREE.Vector3(draftParams.length, 0, 0),
+      new THREE.Vector3(committedParams.length, 0, 0),
       0.75,
       0xff0000
     );
@@ -158,9 +167,25 @@ export default function App() {
 
     const animate = () => {
       renderer.render(scene, camera);
-      animationFrameRef.current = requestAnimationFrame(animate);
+      requestAnimationFrame(animate);
     };
     animate();
+
+    // Resize observer
+    const observeResize = () => {
+      if (!mountRef.current) return;
+      const width = mountRef.current.clientWidth;
+      const height = 480;
+      renderer.setSize(width, height);
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+    };
+
+    const observer = new ResizeObserver(() => {
+      observeResize();
+    });
+    observer.observe(mountRef.current);
+    resizeObserverRef.current = observer;
 
     sceneRef.current = {
       scene,
@@ -168,15 +193,20 @@ export default function App() {
       renderer,
       experimentRoot,
       support,
+      supportGeometry,
+      supportMaterial,
       beamGroup,
       loadMarker,
+      loadMarkerGeometry,
+      loadMarkerMaterial,
       loadArrow,
-      animationFrameId: animationFrameRef.current || 0,
+      lights,
     };
 
     return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
+      if (resizeObserverRef.current) {
+        resizeObserverRef.current.disconnect();
+        resizeObserverRef.current = null;
       }
       renderer.dispose();
       if (mountRef.current && renderer.domElement.parentNode === mountRef.current) {
@@ -186,16 +216,15 @@ export default function App() {
     };
   }, []);
 
-  // Update scene geometry when draft parameters change
+  // Update load marker and arrow positions when committed parameters change
   useEffect(() => {
     if (!sceneRef.current) return;
 
-    const { loadMarker, loadArrow, experimentRoot } = sceneRef.current;
+    const { loadMarker, loadArrow } = sceneRef.current;
 
-    // Update load marker and arrow position to free end
-    loadMarker.position.set(draftParams.length, 0, 0);
-    loadArrow.position.set(draftParams.length, 0, 0);
-  }, [draftParams.length]);
+    loadMarker.position.set(committedParams.length, 0, 0);
+    loadArrow.position.set(committedParams.length, 0, 0);
+  }, [committedParams]);
 
   // Update beam visualization when committed result or visualization scale changes
   useEffect(() => {
@@ -217,7 +246,7 @@ export default function App() {
       beamGroup.removeChild(child);
     }
 
-    // Create segmented bent beam
+    // Create segmented bent beam from committed parameters and result
     const segments = 12;
     const beamMaterial = new THREE.MeshStandardMaterial({
       color: '#2563eb',
@@ -228,15 +257,15 @@ export default function App() {
     const scaledDisplacement = committedResult.tipDisplacementM * visualScale;
 
     for (let i = 0; i < segments; i++) {
-      const xStart = (i / segments) * draftParams.length;
-      const xEnd = ((i + 1) / segments) * draftParams.length;
+      const xStart = (i / segments) * committedParams.length;
+      const xEnd = ((i + 1) / segments) * committedParams.length;
 
-      const segmentLength = draftParams.length / segments;
-      const yStart = calculateBeamDisplacementAtX(xStart, draftParams.length, scaledDisplacement);
-      const yEnd = calculateBeamDisplacementAtX(xEnd, draftParams.length, scaledDisplacement);
+      const segmentLength = committedParams.length / segments;
+      const yStart = calculateBeamDisplacementAtX(xStart, committedParams.length, scaledDisplacement);
+      const yEnd = calculateBeamDisplacementAtX(xEnd, committedParams.length, scaledDisplacement);
       const yMid = (yStart + yEnd) / 2;
 
-      const segmentGeometry = new THREE.BoxGeometry(segmentLength, draftParams.height, draftParams.width);
+      const segmentGeometry = new THREE.BoxGeometry(segmentLength, committedParams.height, committedParams.width);
       const segment = new THREE.Mesh(segmentGeometry, beamMaterial);
 
       segment.position.x = (xStart + xEnd) / 2;
@@ -247,7 +276,7 @@ export default function App() {
 
       beamGroup.add(segment);
     }
-  }, [committedResult, visualScale, draftParams.length, draftParams.height, draftParams.width]);
+  }, [committedResult, visualScale, committedParams]);
 
   // Initialize with baseline result on mount
   useEffect(() => {
